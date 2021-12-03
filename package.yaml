@@ -23,7 +23,7 @@ dependencies:
   - text-show
 
 executables:
-  app:
+  tips:
     source-dirs:      src
     main:             Main.hs
     ghc-options:
