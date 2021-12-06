@@ -16,6 +16,8 @@ default-extensions:
 
 dependencies:
   - base >= 4.7 && < 5
+  - aeson
+  - bytestring
   - data-default
   - lens
   - monomer
