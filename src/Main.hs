@@ -195,7 +195,10 @@ handleEvent wenv node model evt = case evt of
   RemoveTip id ->
     [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
     ]
-  OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm
+  OpenNewTipForm -> [ Model $ model
+                        & currentScreen .~ NewTipForm
+                        & newTipTitle .~ ""
+                        & newTipContent .~ ""
                     , SetFocusOnKey newTipTitleBoxKey
                     ]
   OpenEditTipForm tip -> [ Model $ model
