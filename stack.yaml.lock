@@ -18,6 +18,13 @@ packages:
       sha256: 40e9ea15f9ce797b40e2c2c28d97f4a699e3e2d97c48efa4d3ebc91139f243dc
   original:
     hackage: monomer-1.2.0.0
+- completed:
+    hackage: fuzzyfind-3.0.0@sha256:d79a5d3ed194dd436c6b839bf187211d880cf773b2febaca456e5ccf93f5ac65,1814
+    pantry-tree:
+      size: 542
+      sha256: 0e6c6d4f89083c8385de5adc4f36ad01b2b0ff45261b47f7d90d919969c8b5ed
+  original:
+    hackage: fuzzyfind-3.0.0@sha256:d79a5d3ed194dd436c6b839bf187211d880cf773b2febaca456e5ccf93f5ac65,1814
 snapshots:
 - completed:
     size: 587113

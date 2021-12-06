@@ -7,7 +7,7 @@ module Main where
 import Control.Lens
 import Data.Aeson
 import Data.Maybe
-import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
 import Monomer
 import TextShow
@@ -16,6 +16,8 @@ import qualified Monomer.Lens as L
 import Data.String (IsString)
 import GHC.Generics
 import Data.Default (Default(def))
+import Text.FuzzyFind
+import Data.List
 
 data Screen
   = MainMenu
@@ -28,9 +30,8 @@ type ID = Int
 
 data Tip = Tip
   { _ts :: ID
-  , _title :: Text
-  , _content :: Text
-  , _visible :: Bool
+  , _title :: T.Text
+  , _content :: T.Text
   } deriving (Eq, Show, Generic)
 
 instance FromJSON Tip
@@ -39,11 +40,11 @@ instance ToJSON Tip
 data AppModel = AppModel
   { _tips :: [Tip]
   , _currentScreen :: Screen
-  , _searchBoxText :: Text
-  , _newTipTitle :: Text
-  , _newTipContent :: Text
-  , _editedTipTitle :: Text
-  , _editedTipContent :: Text
+  , _searchBoxText :: T.Text
+  , _newTipTitle :: T.Text
+  , _newTipContent :: T.Text
+  , _editedTipTitle :: T.Text
+  , _editedTipContent :: T.Text
   } deriving (Eq, Show)
 
 data AppEvent
@@ -51,7 +52,7 @@ data AppEvent
   | SetTips [Tip]
   | AddTip
   | EditTip ID
-  | SearchTip
+  | ShowBestMatchingTip [Tip]
   | RemoveTip ID
   | CancelNewTip
   | CancelEditTip
@@ -74,21 +75,19 @@ buildUI wenv model = case model^.currentScreen of
   EditTipForm id -> editTipFormScreen id
   Details tip -> detailsScreen tip
   where
-    mainMenuScreen = keystroke [("Enter", SearchTip)] $ vstack
+    mainMenuScreen = keystroke [("Enter", ShowBestMatchingTip matchedTips)] $ vstack
       [ titleText "Search tip"
       , spacer
       , hstack [ textField_ searchBoxText [placeholder "Write your search here..."]
                    `nodeKey` tipSearchBoxKey
                , spacer
-               , button "Search" SearchTip
-                   `styleBasic` [paddingH 5]
-               , spacer
                , button "Add new" OpenNewTipForm
                    `styleBasic` [paddingH 5]
                ]
       , separatorLine `styleBasic` [paddingT 20]
-      , vstack (zipWith listTips [0..] (model^.tips))
+      , vstack (zipWith listTips [0..] matchedTips)
       ] `styleBasic` [padding 10]
+        where matchedTips = fuzzyTips (model^.searchBoxText) (model^.tips)
 
     newTipFormScreen = vstack
       [ titleText "Add new tip"
@@ -148,7 +147,7 @@ buildUI wenv model = case model^.currentScreen of
           (hstack [ filler
                   , label_ (tip^.title) [ellipsis]
                   , filler
-                  ] `nodeVisible` tip^.visible
+                  ]
           )
       ]
         `nodeKey` showt (tip^.ts)
@@ -159,6 +158,9 @@ buildUI wenv model = case model^.currentScreen of
       `styleBasic` [paddingV 10]
       `styleHover` [bgColor rowBgColor, cursorIcon CursorHand]
     rowBgColor = wenv ^. L.theme . L.userColorMap . at "rowBgColor" . non def
+
+fuzzyTips :: T.Text -> [Tip] -> [Tip]
+fuzzyTips query tips = snd <$> fuzzyFindOn (T.unpack . _title) [T.unpack query] tips
 
 handleEvent
   :: WidgetEnv AppModel AppEvent
@@ -173,16 +175,14 @@ handleEvent wenv node model evt = case evt of
   SetTips ts -> [ Model $ model
                     & searchBoxText .~ ""
                     & tips .~ ts
-                    & (tips . traverse . visible) %~ const True
                     & currentScreen .~ MainMenu
                 , SetFocusOnKey tipSearchBoxKey
                 ]
-  SearchTip ->
-    [ Model $ case model^.searchBoxText of
-        -- set all tips visible
-        "" -> model & (tips . traverse . visible) %~ const True
-        -- only match tips with same content as text-field
-        _  -> model & tips %~ map (\x -> x & visible .~ ((model^.searchBoxText) == (x^.title)))
+  ShowBestMatchingTip matchedTips ->
+    [ Model $ case matchedTips of
+        -- find a way to call `ShowDetails t` instead
+        t : ts -> model & currentScreen .~ Details t
+        _ -> model
     ]
   AddTip | newTipFieldsValidated model ->
     [ Task $ SetTips <$> overwriteTipsFile (newTip : (model^.tips))
@@ -209,14 +209,17 @@ handleEvent wenv node model evt = case evt of
                       & editedTipTitle .~ ""
                       & editedTipContent .~ ""
                   ]
-  GoToMainMenu -> [ Model $ model & currentScreen .~ MainMenu ]
+  GoToMainMenu -> [ Model $ model
+                     & currentScreen .~ MainMenu
+                     & searchBoxText .~ ""
+                  ]
   ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip ]
   _ -> []
   where
     newTip :: Tip
-    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) True
+    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent)
     edit :: Tip -> Tip
-    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) True
+    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent)
     parseTips :: IO [Tip]
     parseTips = fromJust . decode <$> B.readFile "tips-list.json"
     overwriteTipsFile :: [Tip] -> IO [Tip]
@@ -239,6 +242,7 @@ customDarkTheme = darkTheme
 
 main :: IO ()
 main = do
+  -- print $ fuzzyFind ["lin"] ["First tip about Linux", "Second tip about Haskell", "You have to lint your code man..."]
   startApp model handleEvent buildUI config
   where
     config =

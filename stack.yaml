@@ -42,6 +42,7 @@ packages:
 extra-deps:
 - nanovg-0.8.0.0
 - monomer-1.2.0.0
+- fuzzyfind-3.0.0@sha256:d79a5d3ed194dd436c6b839bf187211d880cf773b2febaca456e5ccf93f5ac65,1814
 
 # Override default flag values for local packages and extra-deps
 flags:

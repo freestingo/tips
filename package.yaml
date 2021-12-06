@@ -23,6 +23,7 @@ dependencies:
   - monomer
   - text
   - text-show
+  - fuzzyfind
 
 executables:
   tips:
