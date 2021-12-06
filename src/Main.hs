@@ -101,7 +101,11 @@ buildUI wenv model = widgetTree where
       , spacer
       , label_ (tip^.content) [multiline]
       , spacer
-      , button "Back" GoToMainMenu `styleBasic` [padding 5]
+
+      , hstack [ button "Back" GoToMainMenu `styleBasic` [padding 5]
+               , spacer
+               , button "Delete" (RemoveTip (tip^.ts)) `styleBasic` [padding 5]
+               ]
       ] `styleBasic` [padding 10]
 
   titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
@@ -140,12 +144,11 @@ handleEvent wenv node model evt = case evt of
         _  -> model & tips %~ map (\x -> x & visible .~ ((model^.searchBoxText) == (x^.title)))
     ]
   AddTip | newTipFieldsValidated model ->
-    [ Task $ SetTips <$> do
-        let newTips = newTip : (model^.tips)
-        B.writeFile "tips-list.json" $ encode newTips
-        return newTips
+    [ Task $ SetTips <$> overwriteTipsFile (newTip : (model^.tips))
     ]
-  RemoveTip id -> []
+  RemoveTip id ->
+    [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
+    ]
   OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm ]
   CancelNewTip -> [ Model $ model
                       & currentScreen .~ MainMenu
@@ -156,7 +159,12 @@ handleEvent wenv node model evt = case evt of
   ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip ]
   _ -> []
   where
+    newTip :: Tip
     newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) True
+    overwriteTipsFile :: [Tip] -> IO [Tip]
+    overwriteTipsFile tips = do
+      B.writeFile "tips-list.json" $ encode tips
+      return tips
 
 tipSearchBoxKey :: (IsString a) => a
 tipSearchBoxKey = "tipSearchBoxKey"
