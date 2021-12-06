@@ -16,12 +16,17 @@ import qualified Monomer.Lens as L
 import Data.String (IsString)
 import GHC.Generics
 
+data Screen
+  = MainMenu
+  | NewTipForm
+  | Details Tip
+  deriving (Eq, Show)
+
 data Tip = Tip
   { _ts :: Int
   , _title :: Text
   , _content :: Text
-  , _titleVisible :: Bool
-  , _contentVisible :: Bool
+  , _visible :: Bool
   } deriving (Eq, Show, Generic)
 
 instance FromJSON Tip
@@ -29,9 +34,10 @@ instance ToJSON Tip
 
 data AppModel = AppModel
   { _tips :: [Tip]
-  , _searchPromptText :: Text
+  , _currentScreen :: Screen
   , _searchBoxText :: Text
-  , _clickCount :: Int
+  , _newTipTitle :: Text
+  , _newTipContent :: Text
   } deriving (Eq, Show)
 
 data AppEvent
@@ -40,6 +46,10 @@ data AppEvent
   | AddTip
   | SearchTip
   | RemoveTip Int
+  | CancelNewTip
+  | OpenNewTipForm
+  | GoToMainMenu
+  | ShowDetails Tip
   deriving (Eq, Show)
 
 makeLenses 'Tip
@@ -50,32 +60,59 @@ buildUI
   -> AppModel
   -> WidgetNode AppModel AppEvent
 buildUI wenv model = widgetTree where
-  widgetTree = vstack
-    [ titleText (model^.searchPromptText)
-    , spacer
-    , hstack [ textField_ searchBoxText [placeholder "Write your search here..."]
-                 `nodeKey` tipSearchBoxKey
-             , spacer
-             , button "Search" SearchTip
-                 `styleBasic` [paddingH 5]
-             , spacer
-             , button "Add" AddTip
-                 `styleBasic` [paddingH 5]
-                 `nodeEnabled` (model^.searchBoxText /= "")
-             ]
+  widgetTree = case model^.currentScreen of
+    MainMenu -> vstack
+      [ titleText "Search tip"
+      , spacer
+      , hstack [ textField_ searchBoxText [placeholder "Write your search here..."]
+                   `nodeKey` tipSearchBoxKey
+               , spacer
+               , button "Search" SearchTip
+                   `styleBasic` [paddingH 5]
+               , spacer
+               , button "Add new" OpenNewTipForm
+                   `styleBasic` [paddingH 5]
+               ]
 
-    , separatorLine `styleBasic` [paddingT 20]
+      , separatorLine `styleBasic` [paddingT 20]
 
-    , vstack (zipWith listTips [0..] (model^.tips))
-    ] `styleBasic` [padding 10]
+      , vstack (zipWith listTips [0..] (model^.tips))
+      ] `styleBasic` [padding 10]
+    NewTipForm -> vstack
+      [ titleText "Add new tip"
+      , spacer
+      , subtitleText "Title"
+      , spacer
+      , textField newTipTitle
+      , spacer
+      , subtitleText "Content"
+      , spacer
+      , textArea newTipContent
+      , spacer
+      , hstack [ button "Save" AddTip
+                   `styleBasic` [padding 5]
+                   `nodeEnabled` newTipFieldsValidated model
+               , spacer
+               , button "Back" CancelNewTip `styleBasic` [padding 5]
+               ]
+      ] `styleBasic` [padding 10]
+    Details tip -> vstack
+      [ titleText (tip^.title)
+      , spacer
+      , label_ (tip^.content) [multiline]
+      , spacer
+      , button "Back" GoToMainMenu `styleBasic` [padding 5]
+      ] `styleBasic` [padding 10]
 
   titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
+  subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
   listTips id tip = vstack
-    [ label_ (tip^.title) [ellipsis] `styleBasic` [paddingH 10] `nodeVisible` tip^.titleVisible
-    , label_ (tip^.content) [ellipsis] `styleBasic` [paddingH 10] `nodeVisible` tip^.contentVisible
+    [ hstack [ label_ (tip^.title) [ellipsis] `styleBasic` [paddingH 10]
+             , spacer
+             , button "Open" (ShowDetails tip)
+             ] `nodeVisible` tip^.visible
     ]
       `nodeKey` showt (tip^.ts)
-
       `styleBasic` [paddingT 10]
 
 handleEvent
@@ -87,42 +124,45 @@ handleEvent
 handleEvent wenv node model evt = case evt of
   LoadTips -> [ Task $ SetTips . fromJust . decode <$> B.readFile "tips-list.json"
               ]
-  -- show all tips and reset search box
+  -- show all tips, reset search box and go back to main menu
   SetTips ts -> [ Model $ model
                     & searchBoxText .~ ""
                     & tips .~ ts
-                    & (tips . traverse . titleVisible) %~ const True
+                    & (tips . traverse . visible) %~ const True
+                    & currentScreen .~ MainMenu
                 , SetFocusOnKey tipSearchBoxKey
                 ]
   SearchTip ->
     [ Model $ case model^.searchBoxText of
         -- set all tips visible
-        "" -> model & (tips . traverse . titleVisible) %~ const True
+        "" -> model & (tips . traverse . visible) %~ const True
         -- only match tips with same content as text-field
-        _  -> model & tips %~ map (\x -> x & titleVisible .~ ((model^.searchBoxText) == (x^.title)))
+        _  -> model & tips %~ map (\x -> x & visible .~ ((model^.searchBoxText) == (x^.title)))
     ]
-  AddTip | model^.searchBoxText /= "" ->
+  AddTip | newTipFieldsValidated model ->
     [ Task $ SetTips <$> do
         let newTips = newTip : (model^.tips)
         B.writeFile "tips-list.json" $ encode newTips
         return newTips
     ]
-  -- AddTip | model^.searchBoxText /= "" ->
-  --   [ Model $ model
-  --       & searchBoxText .~ ""
-  --       -- add new tip to list
-  --       & tips %~ (newTip :)
-  --       -- set all tips visible
-  --       & (tips . traverse . titleVisible) %~ const True
-  --   , SetFocusOnKey tipSearchBoxKey
-  --   ]
   RemoveTip id -> []
+  OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm ]
+  CancelNewTip -> [ Model $ model
+                      & currentScreen .~ MainMenu
+                      & newTipTitle .~ ""
+                      & newTipContent .~ ""
+                  ]
+  GoToMainMenu -> [ Model $ model & currentScreen .~ MainMenu ]
+  ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip ]
   _ -> []
   where
-    newTip = Tip (wenv ^. L.timestamp) (model^.searchBoxText) "dummycontent" True False
+    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) True
 
 tipSearchBoxKey :: (IsString a) => a
 tipSearchBoxKey = "tipSearchBoxKey"
+
+newTipFieldsValidated :: AppModel -> Bool
+newTipFieldsValidated model = model^.newTipTitle /= "" && model^.newTipContent /= ""
 
 main :: IO ()
 main = do
@@ -139,8 +179,9 @@ main = do
       ]
     model = AppModel
       { _tips = []
-      , _searchPromptText = "Search tip"
+      , _currentScreen = MainMenu
       , _searchBoxText = ""
-      , _clickCount = 0
+      , _newTipTitle = ""
+      , _newTipContent = ""
       }
 
