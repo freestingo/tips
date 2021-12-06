@@ -89,12 +89,16 @@ buildUI wenv model = case model^.currentScreen of
       ] `styleBasic` [padding 10]
         where matchedTips = fuzzyTips (model^.searchBoxText) (model^.tips)
 
+    -- TODO the title input field won't focus when this screen is reached
+    --      by tabbing to the "Add new" button and pressing Enter;
+    --      the bug doesn't occur instead when clicking it.
+    --      Find out what's up with that
     newTipFormScreen = vstack
       [ titleText "Add new tip"
       , spacer
       , subtitleText "Title"
       , spacer
-      , textField newTipTitle
+      , textField newTipTitle `nodeKey` newTipTitleBoxKey
       , spacer
       , subtitleText "Content"
       , spacer
@@ -113,7 +117,7 @@ buildUI wenv model = case model^.currentScreen of
       , spacer
       , subtitleText "Title"
       , spacer
-      , textField editedTipTitle
+      , textField editedTipTitle `nodeKey` editedTipTitleBoxKey
       , spacer
       , subtitleText "Content"
       , spacer
@@ -133,7 +137,7 @@ buildUI wenv model = case model^.currentScreen of
       , label_ (tip^.content) [multiline]
       , spacer
 
-      , hstack [ button "Back" GoToMainMenu `styleBasic` [padding 5]
+      , hstack [ button "Back" GoToMainMenu `nodeKey` detailsBackButtonKey `styleBasic` [padding 5]
                , spacer
                , button "Edit" (OpenEditTipForm tip) `styleBasic` [padding 5]
                , spacer
@@ -171,19 +175,17 @@ handleEvent
 handleEvent wenv node model evt = case evt of
   LoadTips -> [ Task $ SetTips <$> parseTips
               ]
-  -- show all tips, reset search box and go back to main menu
   SetTips ts -> [ Model $ model
                     & searchBoxText .~ ""
                     & tips .~ ts
                     & currentScreen .~ MainMenu
                 , SetFocusOnKey tipSearchBoxKey
                 ]
-  ShowBestMatchingTip matchedTips ->
-    [ Model $ case matchedTips of
-        -- find a way to call `ShowDetails t` instead
-        t : ts -> model & currentScreen .~ Details t
-        _ -> model
-    ]
+  ShowBestMatchingTip matchedTips -> case matchedTips of
+    t : ts -> [ Model $ model & currentScreen .~ Details t
+              , SetFocusOnKey detailsBackButtonKey
+              ]
+    _ -> []
   AddTip | newTipFieldsValidated model ->
     [ Task $ SetTips <$> overwriteTipsFile (newTip : (model^.tips))
     ]
@@ -193,27 +195,37 @@ handleEvent wenv node model evt = case evt of
   RemoveTip id ->
     [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
     ]
-  OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm ]
+  OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm
+                    , SetFocusOnKey newTipTitleBoxKey
+                    ]
   OpenEditTipForm tip -> [ Model $ model
                              & currentScreen .~ EditTipForm (tip^.ts)
                              & editedTipTitle .~ tip^.title
                              & editedTipContent .~ tip^.content
+                         , SetFocusOnKey editedTipTitleBoxKey
                          ]
   CancelNewTip -> [ Model $ model
                       & currentScreen .~ MainMenu
+                      & searchBoxText .~ ""
                       & newTipTitle .~ ""
                       & newTipContent .~ ""
+                  , SetFocusOnKey tipSearchBoxKey
                   ]
   CancelEditTip -> [ Model $ model
                       & currentScreen .~ MainMenu
+                      & searchBoxText .~ ""
                       & editedTipTitle .~ ""
                       & editedTipContent .~ ""
-                  ]
+                   , SetFocusOnKey tipSearchBoxKey
+                   ]
   GoToMainMenu -> [ Model $ model
                      & currentScreen .~ MainMenu
                      & searchBoxText .~ ""
+                  , SetFocusOnKey tipSearchBoxKey
                   ]
-  ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip ]
+  ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip
+                     , SetFocusOnKey detailsBackButtonKey
+                     ]
   _ -> []
   where
     newTip :: Tip
@@ -230,6 +242,15 @@ handleEvent wenv node model evt = case evt of
 tipSearchBoxKey :: (IsString a) => a
 tipSearchBoxKey = "tipSearchBoxKey"
 
+newTipTitleBoxKey :: (IsString a) => a
+newTipTitleBoxKey = "newTipTitleBoxKey"
+
+editedTipTitleBoxKey :: (IsString a) => a
+editedTipTitleBoxKey = "editedTipTitleBoxKey"
+
+detailsBackButtonKey :: (IsString a) => a
+detailsBackButtonKey = "detailsBackButtonKey"
+
 newTipFieldsValidated :: AppModel -> Bool
 newTipFieldsValidated model = model^.newTipTitle /= "" && model^.newTipContent /= ""
 
@@ -242,7 +263,6 @@ customDarkTheme = darkTheme
 
 main :: IO ()
 main = do
-  -- print $ fuzzyFind ["lin"] ["First tip about Linux", "Second tip about Haskell", "You have to lint your code man..."]
   startApp model handleEvent buildUI config
   where
     config =
