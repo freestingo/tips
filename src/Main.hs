@@ -19,11 +19,14 @@ import GHC.Generics
 data Screen
   = MainMenu
   | NewTipForm
+  | EditTipForm ID
   | Details Tip
   deriving (Eq, Show)
 
+type ID = Int
+
 data Tip = Tip
-  { _ts :: Int
+  { _ts :: ID
   , _title :: Text
   , _content :: Text
   , _visible :: Bool
@@ -38,16 +41,21 @@ data AppModel = AppModel
   , _searchBoxText :: Text
   , _newTipTitle :: Text
   , _newTipContent :: Text
+  , _editedTipTitle :: Text
+  , _editedTipContent :: Text
   } deriving (Eq, Show)
 
 data AppEvent
   = LoadTips
   | SetTips [Tip]
   | AddTip
+  | EditTip ID
   | SearchTip
-  | RemoveTip Int
+  | RemoveTip ID
   | CancelNewTip
+  | CancelEditTip
   | OpenNewTipForm
+  | OpenEditTipForm Tip
   | GoToMainMenu
   | ShowDetails Tip
   deriving (Eq, Show)
@@ -62,6 +70,7 @@ buildUI
 buildUI wenv model = case model^.currentScreen of
   MainMenu -> mainMenuScreen
   NewTipForm -> newTipFormScreen
+  EditTipForm id -> editTipFormScreen id
   Details tip -> detailsScreen tip
   where
     mainMenuScreen = vstack
@@ -99,6 +108,25 @@ buildUI wenv model = case model^.currentScreen of
                ]
       ] `styleBasic` [padding 10]
 
+    editTipFormScreen id = vstack
+      [ titleText "Edit tip"
+      , spacer
+      , subtitleText "Title"
+      , spacer
+      , textField editedTipTitle
+      , spacer
+      , subtitleText "Content"
+      , spacer
+      , textArea editedTipContent
+      , spacer
+      , hstack [ button "Save" (EditTip id)
+                   `styleBasic` [padding 5]
+                   `nodeEnabled` editedTipFieldsValidated model
+               , spacer
+               , button "Back" CancelEditTip `styleBasic` [padding 5]
+               ]
+      ] `styleBasic` [padding 10]
+
     detailsScreen tip = vstack
       [ titleText (tip^.title)
       , spacer
@@ -106,6 +134,8 @@ buildUI wenv model = case model^.currentScreen of
       , spacer
 
       , hstack [ button "Back" GoToMainMenu `styleBasic` [padding 5]
+               , spacer
+               , button "Edit" (OpenEditTipForm tip) `styleBasic` [padding 5]
                , spacer
                , button "Delete" (RemoveTip (tip^.ts)) `styleBasic` [padding 5]
                ]
@@ -129,7 +159,7 @@ handleEvent
   -> AppEvent
   -> [AppEventResponse AppModel AppEvent]
 handleEvent wenv node model evt = case evt of
-  LoadTips -> [ Task $ SetTips . fromJust . decode <$> B.readFile "tips-list.json"
+  LoadTips -> [ Task $ SetTips <$> parseTips
               ]
   -- show all tips, reset search box and go back to main menu
   SetTips ts -> [ Model $ model
@@ -149,14 +179,27 @@ handleEvent wenv node model evt = case evt of
   AddTip | newTipFieldsValidated model ->
     [ Task $ SetTips <$> overwriteTipsFile (newTip : (model^.tips))
     ]
+  EditTip id | editedTipFieldsValidated model ->
+    [ Task $ SetTips <$> overwriteTipsFile (map (\t -> if t^.ts == id then edit t else t) (model^.tips))
+    ]
   RemoveTip id ->
     [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
     ]
   OpenNewTipForm -> [ Model $ model & currentScreen .~ NewTipForm ]
+  OpenEditTipForm tip -> [ Model $ model
+                             & currentScreen .~ EditTipForm (tip^.ts)
+                             & editedTipTitle .~ tip^.title
+                             & editedTipContent .~ tip^.content
+                         ]
   CancelNewTip -> [ Model $ model
                       & currentScreen .~ MainMenu
                       & newTipTitle .~ ""
                       & newTipContent .~ ""
+                  ]
+  CancelEditTip -> [ Model $ model
+                      & currentScreen .~ MainMenu
+                      & editedTipTitle .~ ""
+                      & editedTipContent .~ ""
                   ]
   GoToMainMenu -> [ Model $ model & currentScreen .~ MainMenu ]
   ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip ]
@@ -164,6 +207,10 @@ handleEvent wenv node model evt = case evt of
   where
     newTip :: Tip
     newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) True
+    edit :: Tip -> Tip
+    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) True
+    parseTips :: IO [Tip]
+    parseTips = fromJust . decode <$> B.readFile "tips-list.json"
     overwriteTipsFile :: [Tip] -> IO [Tip]
     overwriteTipsFile tips = do
       B.writeFile "tips-list.json" $ encode tips
@@ -174,6 +221,9 @@ tipSearchBoxKey = "tipSearchBoxKey"
 
 newTipFieldsValidated :: AppModel -> Bool
 newTipFieldsValidated model = model^.newTipTitle /= "" && model^.newTipContent /= ""
+
+editedTipFieldsValidated :: AppModel -> Bool
+editedTipFieldsValidated model = model^.editedTipTitle /= "" && model^.editedTipContent /= ""
 
 main :: IO ()
 main = do
@@ -194,5 +244,7 @@ main = do
       , _searchBoxText = ""
       , _newTipTitle = ""
       , _newTipContent = ""
+      , _editedTipTitle = ""
+      , _editedTipContent = ""
       }
 
