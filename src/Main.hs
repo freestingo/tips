@@ -59,9 +59,12 @@ buildUI
   :: WidgetEnv AppModel AppEvent
   -> AppModel
   -> WidgetNode AppModel AppEvent
-buildUI wenv model = widgetTree where
-  widgetTree = case model^.currentScreen of
-    MainMenu -> vstack
+buildUI wenv model = case model^.currentScreen of
+  MainMenu -> mainMenuScreen
+  NewTipForm -> newTipFormScreen
+  Details tip -> detailsScreen tip
+  where
+    mainMenuScreen = vstack
       [ titleText "Search tip"
       , spacer
       , hstack [ textField_ searchBoxText [placeholder "Write your search here..."]
@@ -73,12 +76,11 @@ buildUI wenv model = widgetTree where
                , button "Add new" OpenNewTipForm
                    `styleBasic` [paddingH 5]
                ]
-
       , separatorLine `styleBasic` [paddingT 20]
-
       , vstack (zipWith listTips [0..] (model^.tips))
       ] `styleBasic` [padding 10]
-    NewTipForm -> vstack
+
+    newTipFormScreen = vstack
       [ titleText "Add new tip"
       , spacer
       , subtitleText "Title"
@@ -96,7 +98,8 @@ buildUI wenv model = widgetTree where
                , button "Back" CancelNewTip `styleBasic` [padding 5]
                ]
       ] `styleBasic` [padding 10]
-    Details tip -> vstack
+
+    detailsScreen tip = vstack
       [ titleText (tip^.title)
       , spacer
       , label_ (tip^.content) [multiline]
@@ -108,16 +111,16 @@ buildUI wenv model = widgetTree where
                ]
       ] `styleBasic` [padding 10]
 
-  titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
-  subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
-  listTips id tip = vstack
-    [ hstack [ label_ (tip^.title) [ellipsis] `styleBasic` [paddingH 10]
-             , spacer
-             , button "Open" (ShowDetails tip)
-             ] `nodeVisible` tip^.visible
-    ]
-      `nodeKey` showt (tip^.ts)
-      `styleBasic` [paddingT 10]
+    titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
+    subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
+    listTips id tip = vstack
+      [ hstack [ label_ (tip^.title) [ellipsis] `styleBasic` [paddingH 10]
+               , spacer
+               , button "Open" (ShowDetails tip)
+               ] `nodeVisible` tip^.visible
+      ]
+        `nodeKey` showt (tip^.ts)
+        `styleBasic` [paddingT 10]
 
 handleEvent
   :: WidgetEnv AppModel AppEvent
@@ -176,14 +179,14 @@ main :: IO ()
 main = do
   startApp model handleEvent buildUI config
   where
-    config = [
-      appWindowTitle "Hello world",
-      appTheme darkTheme,
-      appFontDef "Regular" "./assets/fonts/Roboto-Regular.ttf",
-      appFontDef "Medium" "./assets/fonts/Roboto-Medium.ttf",
-      appFontDef "Bold" "./assets/fonts/Roboto-Bold.ttf",
-      appFontDef "Italic" "./assets/fonts/Roboto-Italic.ttf",
-      appInitEvent LoadTips
+    config =
+      [ appWindowTitle "Hello world"
+      , appTheme darkTheme
+      , appFontDef "Regular" "./assets/fonts/Roboto-Regular.ttf"
+      , appFontDef "Medium" "./assets/fonts/Roboto-Medium.ttf"
+      , appFontDef "Bold" "./assets/fonts/Roboto-Bold.ttf"
+      , appFontDef "Italic" "./assets/fonts/Roboto-Italic.ttf"
+      , appInitEvent LoadTips
       ]
     model = AppModel
       { _tips = []
