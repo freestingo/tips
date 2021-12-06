@@ -15,6 +15,7 @@ import TextShow
 import qualified Monomer.Lens as L
 import Data.String (IsString)
 import GHC.Generics
+import Data.Default (Default(def))
 
 data Screen
   = MainMenu
@@ -73,7 +74,7 @@ buildUI wenv model = case model^.currentScreen of
   EditTipForm id -> editTipFormScreen id
   Details tip -> detailsScreen tip
   where
-    mainMenuScreen = vstack
+    mainMenuScreen = keystroke [("Enter", SearchTip)] $ vstack
       [ titleText "Search tip"
       , spacer
       , hstack [ textField_ searchBoxText [placeholder "Write your search here..."]
@@ -141,16 +142,23 @@ buildUI wenv model = case model^.currentScreen of
                ]
       ] `styleBasic` [padding 10]
 
-    titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
-    subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
     listTips id tip = vstack
-      [ hstack [ label_ (tip^.title) [ellipsis] `styleBasic` [paddingH 10]
-               , spacer
-               , button "Open" (ShowDetails tip)
-               ] `nodeVisible` tip^.visible
+      [ boxRow
+          (ShowDetails tip)
+          (hstack [ filler
+                  , label_ (tip^.title) [ellipsis]
+                  , filler
+                  ] `nodeVisible` tip^.visible
+          )
       ]
         `nodeKey` showt (tip^.ts)
-        `styleBasic` [paddingT 10]
+
+    titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
+    subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
+    boxRow clickAction content = box_ [onClick clickAction] content
+      `styleBasic` [paddingV 10]
+      `styleHover` [bgColor rowBgColor, cursorIcon CursorHand]
+    rowBgColor = wenv ^. L.theme . L.userColorMap . at "rowBgColor" . non def
 
 handleEvent
   :: WidgetEnv AppModel AppEvent
@@ -225,13 +233,17 @@ newTipFieldsValidated model = model^.newTipTitle /= "" && model^.newTipContent /
 editedTipFieldsValidated :: AppModel -> Bool
 editedTipFieldsValidated model = model^.editedTipTitle /= "" && model^.editedTipContent /= ""
 
+customDarkTheme :: Theme
+customDarkTheme = darkTheme
+  & L.userColorMap . at "rowBgColor" ?~ rgbHex "#656565"
+
 main :: IO ()
 main = do
   startApp model handleEvent buildUI config
   where
     config =
       [ appWindowTitle "Hello world"
-      , appTheme darkTheme
+      , appTheme customDarkTheme
       , appFontDef "Regular" "./assets/fonts/Roboto-Regular.ttf"
       , appFontDef "Medium" "./assets/fonts/Roboto-Medium.ttf"
       , appFontDef "Bold" "./assets/fonts/Roboto-Bold.ttf"
