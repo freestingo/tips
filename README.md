@@ -1,10 +1,7 @@
-# Monomer starter application
+# Tips
 
-Starter application for the Monomer library, including:
+Tips and snippets browser and manager using Monomer
 
-- Dependencies
-- Model and events type
-- Event handler
-- UI builder
-
-For more information, check https://github.com/fjvallarino/monomer.
+## TODO
+- Add ability to copy snippets to clipboard
+- Add text markup
