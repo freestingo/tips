@@ -271,10 +271,10 @@ main = do
     config =
       [ appWindowTitle "Hello world"
       , appTheme customDarkTheme
-      , appFontDef "Regular" "./assets/fonts/Roboto-Regular.ttf"
-      , appFontDef "Medium" "./assets/fonts/Roboto-Medium.ttf"
-      , appFontDef "Bold" "./assets/fonts/Roboto-Bold.ttf"
-      , appFontDef "Italic" "./assets/fonts/Roboto-Italic.ttf"
+      , appFontDef "Regular" "./assets/fonts/hasklug-mono.otf"
+      , appFontDef "Medium" "./assets/fonts/hasklug-medium-mono.otf"
+      , appFontDef "Bold" "./assets/fonts/hasklug-bold-mono.otf"
+      , appFontDef "Italic" "./assets/fonts/hasklug-italic-mono.otf"
       , appInitEvent LoadTips
       ]
     model = AppModel

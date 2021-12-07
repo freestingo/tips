@@ -2,7 +2,7 @@
   {
     "_title": "File permissions with chmod and octal representation",
     "_ts": 301589,
-    "_content": "The order is: owner - group owner - world\n0 -> - - -\n1 -> - - x\n2 -> - w -\n3 -> - w x\n4 -> r - -\n5 -> r - x\n6 -> r w -\n7 -> r w x\n\nExample:\n`chmod 755 my-script.sh`"
+    "_content": "The order is: owner - group owner - world\n0 -> ---\n1 -> --x\n2 -> -w-\n3 -> -wx\n4 -> r--\n5 -> r-x\n6 -> rw-\n7 -> rwx\n\nExample:\n`chmod 755 my-script.sh`"
   },
   {
     "_title": "Make autojump go to the correct directory",
