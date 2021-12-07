@@ -9,7 +9,7 @@ import Data.Aeson
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
-import Monomer
+import Monomer hiding (MoveFocus)
 import TextShow
 
 import qualified Monomer.Lens as L
@@ -68,6 +68,7 @@ data AppEvent
   | GoToMainMenu
   | ShowDetails Tip
   | CopyToClipboard T.Text
+  | MoveFocus FocusDirection
   deriving (Eq, Show)
 
 makeLenses 'Tip
@@ -77,11 +78,12 @@ buildUI
   :: WidgetEnv AppModel AppEvent
   -> AppModel
   -> WidgetNode AppModel AppEvent
-buildUI wenv model = case model^.currentScreen of
-  MainMenu -> mainMenuScreen
-  NewTipForm -> newTipFormScreen
-  EditTipForm id -> editTipFormScreen id
-  Details tip -> detailsScreen tip
+buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus FocusBwd)]
+  $ case model^.currentScreen of
+    MainMenu -> mainMenuScreen
+    NewTipForm -> newTipFormScreen
+    EditTipForm id -> editTipFormScreen id
+    Details tip -> detailsScreen tip
   where
     mainMenuScreen = keystroke [("Enter", ShowBestMatchingTip matchedTips)] $ vstack
       [ titleText "Search tip"
@@ -269,6 +271,7 @@ handleEvent wenv node model evt = case evt of
         setClipboard (T.unpack snippet)
         return GoToMainMenu
     ]
+  MoveFocus focusDirection -> [ MoveFocusFromKey Nothing focusDirection ]
   _ -> []
   where
     newTip :: Tip
