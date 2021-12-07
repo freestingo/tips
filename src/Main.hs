@@ -308,7 +308,7 @@ main = do
   startApp model handleEvent buildUI config
   where
     config =
-      [ appWindowTitle "Hello world"
+      [ appWindowTitle "Tips"
       , appTheme customDarkTheme
       , appFontDef "Regular" "./assets/fonts/hasklug-mono.otf"
       , appFontDef "Medium" "./assets/fonts/hasklug-medium-mono.otf"
