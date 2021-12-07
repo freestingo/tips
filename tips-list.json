@@ -2,16 +2,21 @@
   {
     "_title": "File permissions with chmod and octal representation",
     "_ts": 301589,
-    "_content": "The order is: owner - group owner - world\n0 -> ---\n1 -> --x\n2 -> -w-\n3 -> -wx\n4 -> r--\n5 -> r-x\n6 -> rw-\n7 -> rwx\n\nExample:\n`chmod 755 my-script.sh`"
+    "_content": "The order is: owner - group owner - world\n0 -> ---\n1 -> --x\n2 -> -w-\n3 -> -wx\n4 -> r--\n5 -> r-x\n6 -> rw-\n7 -> rwx\n\nExample:\n`chmod 755 my-script.sh`",
+    "_snippets": []
   },
   {
     "_title": "Make autojump go to the correct directory",
     "_ts": 132432,
-    "_content": "The autojump command operates via a list of saved directories, each presenting a weight attribute; when multiple matches are present, autojump will jump to the highest ranking directory in the file.\nUse `j -s` to check all database entries and their respective weights, and `j -i [WEIGHT]` or `j -d [WEIGHT]` to manually increase or decrease the current directory's weight in the database.\n"
+    "_content": "The autojump command operates via a list of saved directories, each presenting a weight attribute; when multiple matches are present, autojump will jump to the highest ranking directory in the file.\nUse `j -s` to check all database entries and their respective weights, and `j -i [WEIGHT]` or `j -d [WEIGHT]` to manually increase or decrease the current directory's weight in the database.\n",
+    "_snippets": []
   },
   {
     "_title": "locate can't find existing files",
     "_ts": 149779,
-    "_content": "The locate database is created by another program named updatedb, which is usually run once a day as a cron job. For this reason, the most recent files can sometimes not show up when using locate.\nTo overcome this, it's possible to run the updatedb program manually with sudo."
+    "_content": "The locate database is created by another program named updatedb, which is usually run once a day as a cron job. For this reason, the most recent files can sometimes not show up when using locate.\nTo overcome this, it's possible to run the updatedb program manually with sudo.",
+    "_snippets": [
+      "sudo updatedb"
+    ]
   }
 ]

@@ -18,6 +18,7 @@ import GHC.Generics
 import Data.Default (Default(def))
 import Text.FuzzyFind
 import Data.List
+import System.Hclip
 import Monomer.Core.Themes.BaseTheme
 
 import Theme
@@ -35,6 +36,7 @@ data Tip = Tip
   { _ts :: ID
   , _title :: T.Text
   , _content :: T.Text
+  , _snippets :: [T.Text]
   } deriving (Eq, Show, Generic)
 
 instance FromJSON Tip
@@ -46,8 +48,10 @@ data AppModel = AppModel
   , _searchBoxText :: T.Text
   , _newTipTitle :: T.Text
   , _newTipContent :: T.Text
+  , _newTipSnippets :: T.Text
   , _editedTipTitle :: T.Text
   , _editedTipContent :: T.Text
+  , _editedTipSnippets :: T.Text
   } deriving (Eq, Show)
 
 data AppEvent
@@ -63,6 +67,7 @@ data AppEvent
   | OpenEditTipForm Tip
   | GoToMainMenu
   | ShowDetails Tip
+  | CopyToClipboard T.Text
   deriving (Eq, Show)
 
 makeLenses 'Tip
@@ -92,10 +97,6 @@ buildUI wenv model = case model^.currentScreen of
       ] `styleBasic` [padding 20]
         where matchedTips = fuzzyTips (model^.searchBoxText) (model^.tips)
 
-    -- TODO the title input field won't focus when this screen is reached
-    --      by tabbing to the "Add new" button and pressing Enter;
-    --      the bug doesn't occur instead when clicking it.
-    --      Find out what's up with that
     newTipFormScreen = vstack
       [ titleText "Add new tip"
       , spacer
@@ -107,11 +108,17 @@ buildUI wenv model = case model^.currentScreen of
       , spacer
       , textArea newTipContent
       , spacer
-      , hstack [ button "Save" AddTip
+      -- TODO use subwidget for adding snippets
+      , subtitleText "Snippets"
+      , label "(write each snippet on its own line)"
+      , spacer
+      , textArea newTipSnippets
+      , spacer
+      , hstack [ button "Back" CancelNewTip `styleBasic` [padding 5]
+               , spacer
+               , mainButton "Save" AddTip
                    `styleBasic` [padding 5]
                    `nodeEnabled` newTipFieldsValidated model
-               , spacer
-               , button "Back" CancelNewTip `styleBasic` [padding 5]
                ]
       ] `styleBasic` [padding 20]
 
@@ -126,6 +133,12 @@ buildUI wenv model = case model^.currentScreen of
       , spacer
       , textArea editedTipContent
       , spacer
+      -- TODO use subwidget for editing snippets
+      , subtitleText "Snippets"
+      , label "(write each snippet on its own line)"
+      , spacer
+      , textArea editedTipSnippets
+      , spacer
       , hstack [ button "Back" CancelEditTip `styleBasic` [padding 5]
                , spacer
                , mainButton "Save" (EditTip id)
@@ -138,6 +151,11 @@ buildUI wenv model = case model^.currentScreen of
       [ titleText (tip^.title)
       , spacer
       , label_ (tip^.content) [multiline]
+      , vstack [ spacer
+               , titleText "Snippets"
+               , spacer
+               , vstack (zipWith listSnippets [1..] (tip^.snippets))
+               ] `nodeVisible` ((T.length . T.unlines) (tip^.snippets) > 0)
       , spacer
       , hstack [ button "Back" GoToMainMenu `nodeKey` detailsBackButtonKey `styleBasic` [padding 5]
                , spacer
@@ -157,6 +175,17 @@ buildUI wenv model = case model^.currentScreen of
           )
       ]
         `nodeKey` showt (tip^.ts)
+
+    listSnippets id snippet = vstack
+      [ boxRow
+          (CopyToClipboard snippet)
+          (hstack [ filler
+                  , label_ snippet [ellipsis]
+                  , filler
+                  ]
+          )
+      ]
+        `nodeKey` T.pack (show id)
 
     titleText text = label text `styleBasic` [textFont "Medium", textSize 20, paddingV 10]
     subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
@@ -201,12 +230,14 @@ handleEvent wenv node model evt = case evt of
                         & currentScreen .~ NewTipForm
                         & newTipTitle .~ ""
                         & newTipContent .~ ""
+                        & newTipSnippets .~ ""
                     , SetFocusOnKey newTipTitleBoxKey
                     ]
   OpenEditTipForm tip -> [ Model $ model
                              & currentScreen .~ EditTipForm (tip^.ts)
                              & editedTipTitle .~ tip^.title
                              & editedTipContent .~ tip^.content
+                             & editedTipSnippets .~ T.unlines (tip^.snippets)
                          , SetFocusOnKey editedTipTitleBoxKey
                          ]
   CancelNewTip -> [ Model $ model
@@ -214,6 +245,7 @@ handleEvent wenv node model evt = case evt of
                       & searchBoxText .~ ""
                       & newTipTitle .~ ""
                       & newTipContent .~ ""
+                      & newTipSnippets .~ ""
                   , SetFocusOnKey tipSearchBoxKey
                   ]
   CancelEditTip -> [ Model $ model
@@ -221,6 +253,7 @@ handleEvent wenv node model evt = case evt of
                       & searchBoxText .~ ""
                       & editedTipTitle .~ ""
                       & editedTipContent .~ ""
+                      & editedTipSnippets .~ ""
                    , SetFocusOnKey tipSearchBoxKey
                    ]
   GoToMainMenu -> [ Model $ model
@@ -231,12 +264,17 @@ handleEvent wenv node model evt = case evt of
   ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip
                      , SetFocusOnKey detailsBackButtonKey
                      ]
+  CopyToClipboard snippet ->
+    [ Task $ do
+        setClipboard (T.unpack snippet)
+        return GoToMainMenu
+    ]
   _ -> []
   where
     newTip :: Tip
-    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent)
+    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (T.lines $ model^.newTipSnippets)
     edit :: Tip -> Tip
-    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent)
+    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (T.lines $ model^.editedTipSnippets)
     parseTips :: IO [Tip]
     parseTips = fromJust . decode <$> B.readFile "tips-list.json"
     overwriteTipsFile :: [Tip] -> IO [Tip]
@@ -281,7 +319,9 @@ main = do
       , _searchBoxText = ""
       , _newTipTitle = ""
       , _newTipContent = ""
+      , _newTipSnippets = ""
       , _editedTipTitle = ""
       , _editedTipContent = ""
+      , _editedTipSnippets = ""
       }
 

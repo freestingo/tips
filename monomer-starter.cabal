@@ -27,7 +27,8 @@ executable tips
       OverloadedStrings
   ghc-options: -fwarn-incomplete-patterns -threaded
   build-depends:
-      aeson
+      Hclip
+    , aeson
     , base >=4.7 && <5
     , bytestring
     , data-default
