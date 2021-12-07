@@ -19,6 +19,7 @@ extra-source-files:
 executable tips
   main-is: Main.hs
   other-modules:
+      Theme
       Paths_monomer_starter
   hs-source-dirs:
       src

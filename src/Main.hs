@@ -18,6 +18,9 @@ import GHC.Generics
 import Data.Default (Default(def))
 import Text.FuzzyFind
 import Data.List
+import Monomer.Core.Themes.BaseTheme
+
+import Theme
 
 data Screen
   = MainMenu
@@ -86,7 +89,7 @@ buildUI wenv model = case model^.currentScreen of
                ]
       , separatorLine `styleBasic` [paddingT 20]
       , vstack (zipWith listTips [0..] matchedTips)
-      ] `styleBasic` [padding 10]
+      ] `styleBasic` [padding 20]
         where matchedTips = fuzzyTips (model^.searchBoxText) (model^.tips)
 
     -- TODO the title input field won't focus when this screen is reached
@@ -110,7 +113,7 @@ buildUI wenv model = case model^.currentScreen of
                , spacer
                , button "Back" CancelNewTip `styleBasic` [padding 5]
                ]
-      ] `styleBasic` [padding 10]
+      ] `styleBasic` [padding 20]
 
     editTipFormScreen id = vstack
       [ titleText "Edit tip"
@@ -123,27 +126,26 @@ buildUI wenv model = case model^.currentScreen of
       , spacer
       , textArea editedTipContent
       , spacer
-      , hstack [ button "Save" (EditTip id)
+      , hstack [ button "Back" CancelEditTip `styleBasic` [padding 5]
+               , spacer
+               , mainButton "Save" (EditTip id)
                    `styleBasic` [padding 5]
                    `nodeEnabled` editedTipFieldsValidated model
-               , spacer
-               , button "Back" CancelEditTip `styleBasic` [padding 5]
                ]
-      ] `styleBasic` [padding 10]
+      ] `styleBasic` [padding 20]
 
     detailsScreen tip = vstack
       [ titleText (tip^.title)
       , spacer
       , label_ (tip^.content) [multiline]
       , spacer
-
       , hstack [ button "Back" GoToMainMenu `nodeKey` detailsBackButtonKey `styleBasic` [padding 5]
                , spacer
-               , button "Edit" (OpenEditTipForm tip) `styleBasic` [padding 5]
+               , mainButton "Edit" (OpenEditTipForm tip) `styleBasic` [padding 5]
                , spacer
-               , button "Delete" (RemoveTip (tip^.ts)) `styleBasic` [padding 5]
+               , mainButton "Delete" (RemoveTip (tip^.ts)) `styleBasic` [padding 5]
                ]
-      ] `styleBasic` [padding 10]
+      ] `styleBasic` [padding 20]
 
     listTips id tip = vstack
       [ boxRow
@@ -156,7 +158,7 @@ buildUI wenv model = case model^.currentScreen of
       ]
         `nodeKey` showt (tip^.ts)
 
-    titleText text = label text `styleBasic` [textFont "Medium", textSize 20]
+    titleText text = label text `styleBasic` [textFont "Medium", textSize 20, paddingV 10]
     subtitleText text = label text `styleBasic` [textFont "Regular", textSize 18]
     boxRow clickAction content = box_ [onClick clickAction] content
       `styleBasic` [paddingV 10]
@@ -259,10 +261,6 @@ newTipFieldsValidated model = model^.newTipTitle /= "" && model^.newTipContent /
 
 editedTipFieldsValidated :: AppModel -> Bool
 editedTipFieldsValidated model = model^.editedTipTitle /= "" && model^.editedTipContent /= ""
-
-customDarkTheme :: Theme
-customDarkTheme = darkTheme
-  & L.userColorMap . at "rowBgColor" ?~ rgbHex "#656565"
 
 main :: IO ()
 main = do
