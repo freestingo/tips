@@ -16,7 +16,10 @@
     "_ts": 149779,
     "_content": "The locate database is created by another program named updatedb, which is usually run once a day as a cron job. For this reason, the most recent files can sometimes not show up when using locate.\nTo overcome this, it's possible to run the updatedb program manually with sudo.",
     "_snippets": [
-      "sudo updatedb"
+      {
+        "_id": 1,
+        "_text": "sudo updatedb"
+      }
     ]
   }
 ]

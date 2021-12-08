@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -32,13 +33,20 @@ data Screen
 
 type ID = Int
 
+data Snippet = Snippet
+  { _id :: ID
+  , _text :: T.Text
+  } deriving (Eq, Show, Generic)
+
 data Tip = Tip
   { _ts :: ID
   , _title :: T.Text
   , _content :: T.Text
-  , _snippets :: [T.Text]
+  , _snippets :: [Snippet]
   } deriving (Eq, Show, Generic)
 
+instance FromJSON Snippet
+instance ToJSON Snippet
 instance FromJSON Tip
 instance ToJSON Tip
 
@@ -48,10 +56,10 @@ data AppModel = AppModel
   , _searchBoxText :: T.Text
   , _newTipTitle :: T.Text
   , _newTipContent :: T.Text
-  , _newTipSnippets :: T.Text
+  , _newTipSnippets :: [Snippet]
   , _editedTipTitle :: T.Text
   , _editedTipContent :: T.Text
-  , _editedTipSnippets :: T.Text
+  , _editedTipSnippets :: [Snippet]
   } deriving (Eq, Show)
 
 data AppEvent
@@ -61,6 +69,8 @@ data AppEvent
   | EditTip ID
   | ShowBestMatchingTip [Tip]
   | RemoveTip ID
+  | AddSnippet (Lens' AppModel [Snippet])
+  | RemoveSnippet (Lens' AppModel [Snippet]) ID
   | CancelNewTip
   | CancelEditTip
   | OpenNewTipForm
@@ -69,8 +79,8 @@ data AppEvent
   | ShowDetails Tip
   | CopyToClipboard T.Text
   | MoveFocus FocusDirection
-  deriving (Eq, Show)
 
+makeLenses 'Snippet
 makeLenses 'Tip
 makeLenses 'AppModel
 
@@ -110,11 +120,10 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       , spacer
       , textArea newTipContent
       , spacer
-      -- TODO use subwidget for adding snippets
       , subtitleText "Snippets"
-      , label "(write each snippet on its own line)"
       , spacer
-      , textArea newTipSnippets
+      , button "Add snippet" (AddSnippet newTipSnippets)
+      , vstack (zipWith (listItem newTipSnippets) [0..] (model^.newTipSnippets))
       , spacer
       , hstack [ button "Back" CancelNewTip `styleBasic` [padding 5]
                , spacer
@@ -135,11 +144,11 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       , spacer
       , textArea editedTipContent
       , spacer
-      -- TODO use subwidget for editing snippets
       , subtitleText "Snippets"
-      , label "(write each snippet on its own line)"
       , spacer
-      , textArea editedTipSnippets
+      , button "Add snippet" (AddSnippet editedTipSnippets)
+      , spacer
+      , vstack (zipWith (listItem editedTipSnippets) [0..] (model^.editedTipSnippets))
       , spacer
       , hstack [ button "Back" CancelEditTip `styleBasic` [padding 5]
                , spacer
@@ -156,8 +165,8 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       , vstack [ spacer
                , titleText "Snippets"
                , spacer
-               , vstack (zipWith listSnippets [1..] (tip^.snippets))
-               ] `nodeVisible` ((T.length . T.unlines) (tip^.snippets) > 0)
+               , vstack (zipWith listSnippets [1..] (_text <$> tip^.snippets))
+               ] `nodeVisible` ((T.length . T.unlines) (_text <$> tip^.snippets) > 0)
       , spacer
       , hstack [ button "Back" GoToMainMenu `nodeKey` detailsBackButtonKey `styleBasic` [padding 5]
                , spacer
@@ -166,6 +175,15 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
                , mainButton "Delete" (RemoveTip (tip^.ts)) `styleBasic` [padding 5]
                ]
       ] `styleBasic` [padding 20]
+
+    listItem :: Lens' AppModel [Snippet] -> ID -> Snippet -> WidgetNode AppModel AppEvent
+    listItem snippetsField idx item = vstack [
+        hstack [
+            textField (snippetsField . singular (ix idx) . text)
+          , spacer
+          , button "Delete" (RemoveSnippet snippetsField idx)
+        ]
+      ] `nodeKey` showt (item ^. Main.id) `styleBasic` [paddingT 10]
 
     listTips id tip = vstack
       [ boxRow
@@ -228,18 +246,29 @@ handleEvent wenv node model evt = case evt of
   RemoveTip id ->
     [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
     ]
+  AddSnippet snippetsField ->
+    [ Model $ model
+        & snippetsField .~ ((model^.snippetsField) |> newSnippet)
+    ]
+  RemoveSnippet snippetsField snippetId ->
+    [ Model $ model
+        & snippetsField .~ removeIdx snippetId (model^.snippetsField)
+    ]
+      where removeIdx :: Int -> [a] -> [a]
+            removeIdx idx lst = part1 ++ drop 1 part2 where
+              (part1, part2) = splitAt idx lst
   OpenNewTipForm -> [ Model $ model
                         & currentScreen .~ NewTipForm
                         & newTipTitle .~ ""
                         & newTipContent .~ ""
-                        & newTipSnippets .~ ""
+                        & newTipSnippets .~ []
                     , SetFocusOnKey newTipTitleBoxKey
                     ]
   OpenEditTipForm tip -> [ Model $ model
                              & currentScreen .~ EditTipForm (tip^.ts)
                              & editedTipTitle .~ tip^.title
                              & editedTipContent .~ tip^.content
-                             & editedTipSnippets .~ T.unlines (tip^.snippets)
+                             & editedTipSnippets .~ tip^.snippets
                          , SetFocusOnKey editedTipTitleBoxKey
                          ]
   CancelNewTip -> [ Model $ model
@@ -247,7 +276,7 @@ handleEvent wenv node model evt = case evt of
                       & searchBoxText .~ ""
                       & newTipTitle .~ ""
                       & newTipContent .~ ""
-                      & newTipSnippets .~ ""
+                      & newTipSnippets .~ []
                   , SetFocusOnKey tipSearchBoxKey
                   ]
   CancelEditTip -> [ Model $ model
@@ -255,7 +284,7 @@ handleEvent wenv node model evt = case evt of
                       & searchBoxText .~ ""
                       & editedTipTitle .~ ""
                       & editedTipContent .~ ""
-                      & editedTipSnippets .~ ""
+                      & editedTipSnippets .~ []
                    , SetFocusOnKey tipSearchBoxKey
                    ]
   GoToMainMenu -> [ Model $ model
@@ -275,9 +304,11 @@ handleEvent wenv node model evt = case evt of
   _ -> []
   where
     newTip :: Tip
-    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (T.lines $ model^.newTipSnippets)
+    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (model^.newTipSnippets)
+    newSnippet :: Snippet
+    newSnippet = Snippet (wenv ^. L.timestamp) ""
     edit :: Tip -> Tip
-    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (T.lines $ model^.editedTipSnippets)
+    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (model^.editedTipSnippets)
     parseTips :: IO [Tip]
     parseTips = fromJust . decode <$> B.readFile "tips-list.json"
     overwriteTipsFile :: [Tip] -> IO [Tip]
@@ -322,9 +353,9 @@ main = do
       , _searchBoxText = ""
       , _newTipTitle = ""
       , _newTipContent = ""
-      , _newTipSnippets = ""
+      , _newTipSnippets = []
       , _editedTipTitle = ""
       , _editedTipContent = ""
-      , _editedTipSnippets = ""
+      , _editedTipSnippets = []
       }
 
