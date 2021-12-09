@@ -33,6 +33,11 @@ data Screen
 
 type TipID = Int
 type SnippetID = Int
+
+type FormTitle = T.Text
+type TitleNodeKey = T.Text
+type TitleField = ALens' AppModel T.Text
+type ContentField = ALens' AppModel T.Text
 type SnippetsField = Lens' AppModel [Snippet]
 
 data Snippet = Snippet
@@ -111,57 +116,61 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       ] `styleBasic` [padding 20]
         where matchedTips = fuzzyTips (model^.searchBoxText) (model^.tips)
 
-    newTipFormScreen = vstack
-      [ titleText "Add new tip"
-      , spacer
-      , subtitleText "Title"
-      , spacer
-      , textField newTipTitle `nodeKey` newTipTitleBoxKey
-      , spacer
-      , subtitleText "Content"
-      , spacer
-      , textArea newTipContent
-      , spacer
-      , hstack [ subtitleText "Snippets"
-               , filler
-               , button "Add snippet" (AddSnippet newTipSnippets)
-               ]
-      , spacer
-      , vstack (zipWith (listItem newTipSnippets) [0..] (model^.newTipSnippets))
-      , spacer
-      , hstack [ button "Back" CancelNewTip `styleBasic` [padding 5]
-               , spacer
-               , mainButton "Save" AddTip
-                   `styleBasic` [padding 5]
-                   `nodeEnabled` newTipFieldsValidated model
-               ]
-      ] `styleBasic` [padding 20]
+    tipFormScreen ::
+         FormTitle
+      -> (TitleField, TitleNodeKey)
+      -> ContentField
+      -> SnippetsField
+      -> (AppEvent, AppEvent)
+      -> (AppModel -> Bool)
+      -> WidgetNode AppModel AppEvent
+    tipFormScreen
+      screenTitle
+      (titleField, titleKey)
+      contentField
+      snippetsField
+      (cancelAction, successAction)
+      validateFields = vstack
+        [ titleText screenTitle
+        , spacer
+        , subtitleText "Title"
+        , spacer
+        , textField titleField `nodeKey` titleKey
+        , spacer
+        , subtitleText "Content"
+        , spacer
+        , textArea contentField
+        , spacer
+        , hstack [ subtitleText "Snippets"
+                 , filler
+                 , button "Add snippet" (AddSnippet snippetsField)
+                 ]
+        , spacer
+        , vstack (zipWith (listItem snippetsField) [0..] (model^.snippetsField))
+        , spacer
+        , hstack [ button "Back" cancelAction `styleBasic` [padding 5]
+                 , spacer
+                 , mainButton "Save" successAction
+                     `styleBasic` [padding 5]
+                     `nodeEnabled` validateFields model
+                 ]
+        ] `styleBasic` [padding 20]
 
-    editTipFormScreen id = vstack
-      [ titleText "Edit tip"
-      , spacer
-      , subtitleText "Title"
-      , spacer
-      , textField editedTipTitle `nodeKey` editedTipTitleBoxKey
-      , spacer
-      , subtitleText "Content"
-      , spacer
-      , textArea editedTipContent
-      , spacer
-      , hstack [ subtitleText "Snippets"
-               , filler
-               , button "Add snippet" (AddSnippet editedTipSnippets)
-               ]
-      , spacer
-      , vstack (zipWith (listItem editedTipSnippets) [0..] (model^.editedTipSnippets))
-      , spacer
-      , hstack [ button "Back" CancelEditTip `styleBasic` [padding 5]
-               , spacer
-               , mainButton "Save" (EditTip id)
-                   `styleBasic` [padding 5]
-                   `nodeEnabled` editedTipFieldsValidated model
-               ]
-      ] `styleBasic` [padding 20]
+    newTipFormScreen = tipFormScreen
+      "Add new tip"
+      (newTipTitle, newTipTitleBoxKey)
+      newTipContent
+      newTipSnippets
+      (CancelNewTip, AddTip)
+      newTipFieldsValidated
+
+    editTipFormScreen id = tipFormScreen
+      "Edit tip"
+      (editedTipTitle, editedTipTitleBoxKey)
+      editedTipContent
+      editedTipSnippets
+      (CancelEditTip, EditTip id)
+      editedTipFieldsValidated
 
     detailsScreen tip = vstack
       [ titleText (tip^.title)
@@ -229,27 +238,32 @@ handleEvent
   -> AppEvent
   -> [AppEventResponse AppModel AppEvent]
 handleEvent wenv node model evt = case evt of
-  LoadTips -> [ Task $ SetTips <$> parseTips
-              ]
-  SetTips ts -> [ Model $ model
-                    & searchBoxText .~ ""
-                    & tips .~ ts
-                    & currentScreen .~ MainMenu
-                , SetFocusOnKey tipSearchBoxKey
-                ]
+  LoadTips ->
+    [ Task $ SetTips <$> parseTips
+    ]
+  SetTips ts ->
+    [ Model $ model
+        & searchBoxText .~ ""
+        & tips .~ ts
+        & currentScreen .~ MainMenu
+    , SetFocusOnKey tipSearchBoxKey
+    ]
   ShowBestMatchingTip matchedTips -> case matchedTips of
     t : ts -> [ Model $ model & currentScreen .~ Details t
               , SetFocusOnKey detailsBackButtonKey
               ]
     _ -> []
   AddTip | newTipFieldsValidated model ->
-    [ Task $ SetTips <$> overwriteTipsFile (newTip : (model^.tips))
+    [ Task $ SetTips <$>
+        overwriteTipsFile (newTip : (model^.tips))
     ]
   EditTip id | editedTipFieldsValidated model ->
-    [ Task $ SetTips <$> overwriteTipsFile (map (\t -> if t^.ts == id then edit t else t) (model^.tips))
+    [ Task $ SetTips <$>
+        overwriteTipsFile (map (\t -> if t^.ts == id then edit t else t) (model^.tips))
     ]
   RemoveTip id ->
-    [ Task $ SetTips <$> overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
+    [ Task $ SetTips <$>
+        overwriteTipsFile (filter (\t -> (t^.ts) /= id) (model^.tips))
     ]
   AddSnippet snippetsField ->
     [ Model $ model
@@ -262,50 +276,57 @@ handleEvent wenv node model evt = case evt of
       where removeIdx :: Int -> [a] -> [a]
             removeIdx idx lst = part1 ++ drop 1 part2 where
               (part1, part2) = splitAt idx lst
-  OpenNewTipForm -> [ Model $ model
-                        & currentScreen .~ NewTipForm
-                        & newTipTitle .~ ""
-                        & newTipContent .~ ""
-                        & newTipSnippets .~ []
-                    , SetFocusOnKey newTipTitleBoxKey
-                    ]
-  OpenEditTipForm tip -> [ Model $ model
-                             & currentScreen .~ EditTipForm (tip^.ts)
-                             & editedTipTitle .~ tip^.title
-                             & editedTipContent .~ tip^.content
-                             & editedTipSnippets .~ tip^.snippets
-                         , SetFocusOnKey editedTipTitleBoxKey
-                         ]
-  CancelNewTip -> [ Model $ model
-                      & currentScreen .~ MainMenu
-                      & searchBoxText .~ ""
-                      & newTipTitle .~ ""
-                      & newTipContent .~ ""
-                      & newTipSnippets .~ []
-                  , SetFocusOnKey tipSearchBoxKey
-                  ]
-  CancelEditTip -> [ Model $ model
-                      & currentScreen .~ MainMenu
-                      & searchBoxText .~ ""
-                      & editedTipTitle .~ ""
-                      & editedTipContent .~ ""
-                      & editedTipSnippets .~ []
-                   , SetFocusOnKey tipSearchBoxKey
-                   ]
-  GoToMainMenu -> [ Model $ model
-                     & currentScreen .~ MainMenu
-                     & searchBoxText .~ ""
-                  , SetFocusOnKey tipSearchBoxKey
-                  ]
-  ShowDetails tip -> [ Model $ model & currentScreen .~ Details tip
-                     , SetFocusOnKey detailsBackButtonKey
-                     ]
+  OpenNewTipForm ->
+    [ Model $ model
+        & currentScreen .~ NewTipForm
+        & newTipTitle .~ ""
+        & newTipContent .~ ""
+        & newTipSnippets .~ []
+    , SetFocusOnKey newTipTitleBoxKey
+    ]
+  OpenEditTipForm tip ->
+    [ Model $ model
+        & currentScreen .~ EditTipForm (tip^.ts)
+        & editedTipTitle .~ tip^.title
+        & editedTipContent .~ tip^.content
+        & editedTipSnippets .~ tip^.snippets
+    , SetFocusOnKey editedTipTitleBoxKey
+    ]
+  CancelNewTip ->
+    [ Model $ model
+        & currentScreen .~ MainMenu
+        & searchBoxText .~ ""
+        & newTipTitle .~ ""
+        & newTipContent .~ ""
+        & newTipSnippets .~ []
+    , SetFocusOnKey tipSearchBoxKey
+    ]
+  CancelEditTip ->
+    [ Model $ model
+       & currentScreen .~ MainMenu
+       & searchBoxText .~ ""
+       & editedTipTitle .~ ""
+       & editedTipContent .~ ""
+       & editedTipSnippets .~ []
+    , SetFocusOnKey tipSearchBoxKey
+    ]
+  GoToMainMenu ->
+    [ Model $ model
+       & currentScreen .~ MainMenu
+       & searchBoxText .~ ""
+    , SetFocusOnKey tipSearchBoxKey
+    ]
+  ShowDetails tip ->
+    [ Model $ model & currentScreen .~ Details tip
+    , SetFocusOnKey detailsBackButtonKey
+    ]
   CopyToClipboard snippet ->
     [ Task $ do
         setClipboard (T.unpack snippet)
         return GoToMainMenu
     ]
-  MoveFocus focusDirection -> [ MoveFocusFromKey Nothing focusDirection ]
+  MoveFocus focusDirection ->
+    [ MoveFocusFromKey Nothing focusDirection ]
   _ -> []
   where
     newTip :: Tip
