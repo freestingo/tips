@@ -122,9 +122,11 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       , spacer
       , textArea newTipContent
       , spacer
-      , subtitleText "Snippets"
+      , hstack [ subtitleText "Snippets"
+               , filler
+               , button "Add snippet" (AddSnippet newTipSnippets)
+               ]
       , spacer
-      , button "Add snippet" (AddSnippet newTipSnippets)
       , vstack (zipWith (listItem newTipSnippets) [0..] (model^.newTipSnippets))
       , spacer
       , hstack [ button "Back" CancelNewTip `styleBasic` [padding 5]
@@ -146,9 +148,10 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
       , spacer
       , textArea editedTipContent
       , spacer
-      , subtitleText "Snippets"
-      , spacer
-      , button "Add snippet" (AddSnippet editedTipSnippets)
+      , hstack [ subtitleText "Snippets"
+               , filler
+               , button "Add snippet" (AddSnippet editedTipSnippets)
+               ]
       , spacer
       , vstack (zipWith (listItem editedTipSnippets) [0..] (model^.editedTipSnippets))
       , spacer
@@ -306,11 +309,13 @@ handleEvent wenv node model evt = case evt of
   _ -> []
   where
     newTip :: Tip
-    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (model^.newTipSnippets)
+    newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (filterNonEmpty $ model^.newTipSnippets)
     newSnippet :: Snippet
     newSnippet = Snippet (wenv ^. L.timestamp) ""
     edit :: Tip -> Tip
-    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (model^.editedTipSnippets)
+    edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (filterNonEmpty $ model^.editedTipSnippets)
+    filterNonEmpty :: [Snippet] -> [Snippet]
+    filterNonEmpty = filter ((/= "") . (^.text))
     parseTips :: IO [Tip]
     parseTips = fromJust . decode <$> B.readFile "tips-list.json"
     overwriteTipsFile :: [Tip] -> IO [Tip]
