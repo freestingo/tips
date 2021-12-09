@@ -27,19 +27,21 @@ import Theme
 data Screen
   = MainMenu
   | NewTipForm
-  | EditTipForm ID
+  | EditTipForm TipID
   | Details Tip
   deriving (Eq, Show)
 
-type ID = Int
+type TipID = Int
+type SnippetID = Int
+type SnippetsField = Lens' AppModel [Snippet]
 
 data Snippet = Snippet
-  { _id :: ID
+  { _id :: SnippetID
   , _text :: T.Text
   } deriving (Eq, Show, Generic)
 
 data Tip = Tip
-  { _ts :: ID
+  { _ts :: TipID
   , _title :: T.Text
   , _content :: T.Text
   , _snippets :: [Snippet]
@@ -66,11 +68,11 @@ data AppEvent
   = LoadTips
   | SetTips [Tip]
   | AddTip
-  | EditTip ID
+  | EditTip TipID
   | ShowBestMatchingTip [Tip]
-  | RemoveTip ID
-  | AddSnippet (Lens' AppModel [Snippet])
-  | RemoveSnippet (Lens' AppModel [Snippet]) ID
+  | RemoveTip TipID
+  | AddSnippet SnippetsField
+  | RemoveSnippet SnippetsField SnippetID
   | CancelNewTip
   | CancelEditTip
   | OpenNewTipForm
@@ -176,7 +178,7 @@ buildUI wenv model = keystroke [("C-n", MoveFocus FocusFwd), ("C-p", MoveFocus F
                ]
       ] `styleBasic` [padding 20]
 
-    listItem :: Lens' AppModel [Snippet] -> ID -> Snippet -> WidgetNode AppModel AppEvent
+    listItem :: SnippetsField -> SnippetID -> Snippet -> WidgetNode AppModel AppEvent
     listItem snippetsField idx item = vstack [
         hstack [
             textField (snippetsField . singular (ix idx) . text)
