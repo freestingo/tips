@@ -9,7 +9,7 @@ import Control.Lens
 import Data.Text
 import Data.Aeson
 
-import Monomer (FocusDirection)
+import Monomer
 import Data.Default
 
 data Screen
@@ -27,6 +27,12 @@ type TitleNodeKey = Text
 type TitleField = ALens' AppModel Text
 type ContentField = ALens' AppModel Text
 type SnippetsField = Lens' AppModel [Snippet]
+
+type TipsWenv = WidgetEnv AppModel AppEvent
+type TipsNode = WidgetNode AppModel AppEvent
+
+newtype ActionOnSuccess = OnSuccess AppEvent
+newtype ActionOnCancel = OnCancel AppEvent
 
 data Snippet = Snippet
   { _id :: SnippetID
@@ -62,24 +68,20 @@ instance ToJSON Tip
 data AppModel = AppModel
   { _tips :: [Tip]
   , _currentScreen :: Screen
+  , _activeTip :: Tip
   , _searchBoxText :: Text
-  , _newTipTitle :: Text
-  , _newTipContent :: Text
-  , _newTipSnippets :: [Snippet]
-  , _editedTipTitle :: Text
-  , _editedTipContent :: Text
-  , _editedTipSnippets :: [Snippet]
   } deriving (Eq, Show)
 
 data AppEvent
   = LoadTips
   | SetTips [Tip]
+  | SaveTips
   | AddTip
   | EditTip TipID
   | ShowBestMatchingTip [Tip]
   | RemoveTip TipID
-  | AddSnippet SnippetsField
-  | RemoveSnippet SnippetsField SnippetID
+  | AddSnippet
+  | RemoveSnippet SnippetID
   | CancelNewTip
   | CancelEditTip
   | OpenNewTipForm
