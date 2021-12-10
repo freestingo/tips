@@ -19,7 +19,9 @@ extra-source-files:
 executable tips
   main-is: Main.hs
   other-modules:
+      Model
       Theme
+      UI
       Paths_monomer_starter
   hs-source-dirs:
       src
