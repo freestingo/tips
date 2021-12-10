@@ -282,7 +282,7 @@ handleEvent wenv node model evt = case evt of
     newTip = Tip (wenv ^. L.timestamp) (model^.newTipTitle) (model^.newTipContent) (filterNonEmpty $ model^.newTipSnippets)
 
     newSnippet :: Snippet
-    newSnippet = Snippet (wenv ^. L.timestamp) ""
+    newSnippet = def (wenv ^. L.timestamp)
 
     edit :: Tip -> Tip
     edit tip = Tip (tip^.ts) (model^.editedTipTitle) (model^.editedTipContent) (filterNonEmpty $ model^.editedTipSnippets)

@@ -10,6 +10,7 @@ import Data.Text
 import Data.Aeson
 
 import Monomer (FocusDirection)
+import Data.Default
 
 data Screen
   = MainMenu
@@ -32,12 +33,26 @@ data Snippet = Snippet
   , _text :: Text
   } deriving (Eq, Show, Generic)
 
+instance Default Snippet where
+  def = Snippet
+    { _id = 0
+    , _text = ""
+    }
+
 data Tip = Tip
   { _ts :: TipID
   , _title :: Text
   , _content :: Text
   , _snippets :: [Snippet]
   } deriving (Eq, Show, Generic)
+
+instance Default Tip where
+  def = Tip
+    { _ts = 0
+    , _title = ""
+    , _content = ""
+    , _snippets = []
+    }
 
 instance FromJSON Snippet
 instance ToJSON Snippet
